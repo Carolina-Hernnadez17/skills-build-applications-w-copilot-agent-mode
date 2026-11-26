@@ -28,22 +28,18 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 
 ## Implementation decisions
 
-Record your plan here before editing code.
-
-- Presentation tier decision:
-- Logic tier decision:
-- Data tier decision:
-- Activity tracking approach:
-- Team management approach:
-- Leaderboard approach:
-- Workout suggestions approach:
+- Presentation tier decision: Build route-specific React components that use the shared API client and render loading, empty, success, and accessible error states.
+- Logic tier decision: Keep Express routes thin and place validation and MongoDB behavior in explicit service functions.
+- Data tier decision: Define required Mongoose fields and defaults in the schemas; keep seed data stable with idempotent upserts.
+- Activity tracking approach: Validate `userId` and `teamId` as ObjectIds and as existing records, require a positive minute count, compute `points` from submitted minutes, and set `occurredAt` at creation.
+- Team management approach: Reject missing names with `400`, preserve submitted names and mascots, validate optional member IDs, and keep a default empty members array.
+- Leaderboard approach: Aggregate stored activity points by team ID, sort totals highest first, break ties deterministically, and add 1-based ranks.
+- Workout suggestions approach: Find the matching seeded user by email, derive focus from fitness goal or recent activity, return matching workouts, include an explanatory reason, and return `404` for unknown users.
 
 ## Test plan
 
-Record the commands you run and what each failure means.
-
-- Data-tier command: `npm run test:data --prefix octofit-tracker/backend`
-- API command: `npm run test:api --prefix octofit-tracker/backend`
-- Frontend command: `npm test --prefix octofit-tracker/frontend`
-- Backend build command: `npm run build --prefix octofit-tracker/backend`
-- Frontend build command: `npm run build --prefix octofit-tracker/frontend`
+- Data-tier command: `npm run test:data --prefix octofit-tracker/backend`; result: 5/5 passing. It verifies Mongoose validation and idempotent seeded data.
+- API command: `npm run test:api --prefix octofit-tracker/backend`; result: 4/4 passing. It verifies activity/team contracts, leaderboard ordering, workout matching, and 4xx input failures.
+- Frontend command: `npm test --prefix octofit-tracker/frontend`; result: 15/15 passing. It verifies API rendering plus loading, empty, and accessible error states.
+- Backend build command: `npm run build --prefix octofit-tracker/backend`; result: passing.
+- Frontend build command: `npm run build --prefix octofit-tracker/frontend`; result: passing.
