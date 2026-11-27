@@ -9,6 +9,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isObjectId(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value);
+}
+
 export async function listActivities() {
   return Activity.find().lean();
 }
@@ -17,14 +21,14 @@ export async function createActivity(input: unknown) {
   if (!isRecord(input)) throw httpError(400, 'Activity input is required');
   const { userId, teamId, type, minutes } = input;
   if (
-    typeof userId !== 'string'
-    || typeof teamId !== 'string'
+    !isObjectId(userId)
+    || !isObjectId(teamId)
     || typeof type !== 'string'
     || typeof minutes !== 'number'
   ) {
     throw httpError(400, 'Valid userId, teamId, type, and minutes are required');
   }
-  if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(teamId) || !type.trim() || minutes < 1) {
+  if (!type.trim() || !Number.isFinite(minutes) || !Number.isInteger(minutes) || minutes < 1) {
     throw httpError(400, 'Invalid activity input');
   }
   const [user, team] = await Promise.all([
@@ -52,19 +56,24 @@ export async function createTeam(input: unknown) {
   const name = typeof input.name === 'string' ? input.name.trim() : '';
   const mascot = typeof input.mascot === 'string' ? input.mascot.trim() : '';
   if (!name) throw httpError(400, 'Team name is required');
+  if (!mascot) throw httpError(400, 'Team mascot is required');
 
-  const memberIds = Array.isArray(input.members)
-    ? input.members.filter((member): member is string => typeof member === 'string')
-    : [];
-  if (memberIds.some((member) => !mongoose.isValidObjectId(member))) {
+  if (input.members !== undefined && !Array.isArray(input.members)) {
+    throw httpError(400, 'Team members must be an array');
+  }
+  const memberIds = input.members === undefined
+    ? []
+    : input.members as unknown[];
+  if (memberIds.some((member) => !isObjectId(member))) {
     throw httpError(400, 'Team contains an invalid member ID');
   }
   if (memberIds.length > 0) {
-    const existingCount = await User.countDocuments({ _id: { $in: memberIds } });
-    if (existingCount !== memberIds.length) throw httpError(404, 'One or more team members were not found');
+    const uniqueMemberIds = [...new Set(memberIds)];
+    const existingCount = await User.countDocuments({ _id: { $in: uniqueMemberIds } });
+    if (existingCount !== uniqueMemberIds.length) throw httpError(404, 'One or more team members were not found');
   }
   try {
-    return await Team.create({ name, mascot, members: memberIds });
+    return await Team.create({ name, mascot, members: memberIds as string[] });
   } catch (error) {
     if (error instanceof mongoose.Error.ValidationError) throw httpError(400, error.message);
     throw error;
@@ -105,7 +114,7 @@ export async function suggestWorkouts(_userEmail: string) {
       : activityType === 'walk'
         ? 'mobility'
         : undefined;
-  const focus = goal || activityFocus;
+  const focus = activityFocus || goal;
 
   const workouts = await Workout.find(focus ? { focus } : {}).sort({ title: 1 }).lean();
   const suggestions = workouts.length > 0
